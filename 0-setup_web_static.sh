@@ -1,27 +1,37 @@
-#!/usr/bin/env bash
-# Bash script that sets up web servers for the deployment of web_static
-sudo apt-get update
-sudo apt-get -y install nginx
-sudo ufw allow 'Nginx HTTP'
+#!/bin/bash
 
-sudo mkdir -p /data/
-sudo mkdir -p /data/web_static/
-sudo mkdir -p /data/web_static/releases/
-sudo mkdir -p /data/web_static/shared/
-sudo mkdir -p /data/web_static/releases/test/
-sudo touch /data/web_static/releases/test/index.html
-sudo echo "<html>
-  <head>
-  </head>
-  <body>
-    Holberton School
-  </body>
-</html>" | sudo tee /data/web_static/releases/test/index.html
+# Install Nginx if it is not already installed
+if ! dpkg-query -W nginx; then
+    apt-get update
+    apt-get install -y nginx
+fi
 
-sudo ln -s -f /data/web_static/releases/test/ /data/web_static/current
+# Create the /data/ folder if it doesn't already exist
+if [ ! -d "/data" ]; then
+    mkdir /data
+fi
 
-sudo chown -R ubuntu:ubuntu /data/
+# Create the necessary subfolders in /data/
+mkdir -p /data/web_static/{releases,shared}
+mkdir -p /data/web_static/releases/test
 
-sudo sed -i '/listen 80 default_server/a location /hbnb_static { alias /data/web_static/current/;}' /etc/nginx/sites-enabled/default
+# Create a fake index.html file for testing
+echo "Hello, World!" > /data/web_static/releases/test/index.html
 
-sudo service nginx restart
+# Create a symbolic link from /data/web_static/current to /data/web_static/releases/test/
+if [ -L "/data/web_static/current" ]; then
+    rm /data/web_static/current
+fi
+ln -s /data/web_static/releases/test/ /data/web_static/current
+
+# Give ownership of the /data/ folder to the ubuntu user and group (recursively)
+chown -R ubuntu:ubuntu /data
+
+# Update the Nginx configuration to serve the content of /data/web_static/current/ to hbnb_static
+sed -i "s/root \/var\/www\/html;/root \/data\/web_static\/current;/" /etc/nginx/sites-available/default
+sed -i "s/index index.html index.htm index.nginx-debian.html;/index index.html;/" /etc/nginx/sites-available/default
+sed -i "s/# location \/ {/location \/hbnb_static\/ {/" /etc/nginx/sites-available/default
+
+# Restart Nginx
+systemctl restart nginx
+
